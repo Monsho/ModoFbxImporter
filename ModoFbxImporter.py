@@ -104,6 +104,7 @@ class ModoFbxImporter:
             fbxChild = modoHier.fbxNode_.GetChild(i)
             nodeAttr = fbxChild.GetNodeAttribute()
             if nodeAttr is not None:
+                print nodeAttr.GetAttributeType()
                 e = nodeAttr.GetAttributeType()
                 # mesh type.
                 if e == FbxNodeAttribute.eMesh:
@@ -168,6 +169,13 @@ class ModoFbxImporter:
             sceneUp.modoNode_.rotation.set((lxu.vector.math.radians(-90 * axisInfo[1]), 0, 0))
             rootHier.AppendChild(sceneUp)
             rootHier = sceneUp
+
+        # ルートノード直下にノードが1つしかなく、且つこれがNullノードの場合は無視する
+        if fbxRoot.GetChildCount() == 1:
+            fbxChild = fbxRoot.GetChild(0)
+            nodeAttr = fbxChild.GetNodeAttribute()
+            if (nodeAttr is not None) and (nodeAttr.GetAttributeType() == FbxNodeAttribute.eNull):
+                rootHier.fbxNode_ = fbxChild
 
         self.CreateHierarchyRecursive(rootHier)
 
@@ -257,8 +265,8 @@ class ModoFbxImporter:
 
 if __name__ == '__main__':
     # ファイルオープンダイアログを表示する
-    filepath = modo.dialogs.customFile('fileOpen', 'FBX 2016', ('fbx'), ('FBX 2016 File'), ('*.fbx'))
-    if filepath is not None:
+    filepath = modo.dialogs.customFile('fileOpen', 'FBX 2016', ('fbx',), ('FBX 2016 File',), ('*.fbx',))
+    if (filepath is not None) and (len(filepath) > 0):
         importer = ModoFbxImporter()
 
         # FBXを読み込む
