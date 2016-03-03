@@ -95,6 +95,18 @@ class ModoFbxImporter:
         elif order == eEulerZYX:
             node.rotation.channel("order").set(5)
 
+    def CreateHierarchyChild(self, modoHier, fbxChild, modoNode, nodeType):
+        thisHier = ModoHierarchy()
+        thisHier.name_ = fbxChild.GetName()
+        thisHier.fbxNode_ = fbxChild
+        thisHier.nodeType_ = nodeType
+        thisHier.modoNode_ = modoNode
+        if nodeType != "Mesh":
+            thisHier.ScaleLocatorRadius(0.1)
+        self.ReadTransform(thisHier.modoNode_, fbxChild)
+        modoHier.AppendChild(thisHier)
+        self.CreateHierarchyRecursive(thisHier)
+
     def CreateHierarchyRecursive(self, modoHier):
         num = modoHier.fbxNode_.GetChildCount()
         if num == 0: return
@@ -104,40 +116,23 @@ class ModoFbxImporter:
             fbxChild = modoHier.fbxNode_.GetChild(i)
             nodeAttr = fbxChild.GetNodeAttribute()
             if nodeAttr is not None:
-                print nodeAttr.GetAttributeType()
                 e = nodeAttr.GetAttributeType()
                 # mesh type.
                 if e == FbxNodeAttribute.eMesh:
-                    thisHier = ModoHierarchy()
-                    thisHier.name_ = fbxChild.GetName()
-                    thisHier.fbxNode_ = fbxChild
-                    thisHier.nodeType_ = "Mesh"
-                    thisHier.modoNode_ = modoScene.addMesh(thisHier.name_)
-                    self.ReadTransform(thisHier.modoNode_, fbxChild)
-                    modoHier.AppendChild(thisHier)
-                    self.CreateHierarchyRecursive(thisHier)
+                    modoNode = modoScene.addMesh(fbxChild.GetName())
+                    self.CreateHierarchyChild(modoHier, fbxChild, modoNode, "Mesh")
                 # skeleton joint type.
                 elif e == FbxNodeAttribute.eSkeleton:
-                    thisHier = ModoHierarchy()
-                    thisHier.name_ = fbxChild.GetName()
-                    thisHier.fbxNode_ = fbxChild
-                    thisHier.nodeType_ = "Skeleton"
-                    thisHier.modoNode_ = modoScene.addJointLocator(thisHier.name_)
-                    thisHier.ScaleLocatorRadius(0.1)
-                    self.ReadTransform(thisHier.modoNode_, fbxChild)
-                    modoHier.AppendChild(thisHier)
-                    self.CreateHierarchyRecursive(thisHier)
+                    modoNode = modoScene.addJointLocator(fbxChild.GetName())
+                    self.CreateHierarchyChild(modoHier, fbxChild, modoNode, "Skeleton")
+                # others.
+                else:
+                    modoNode = modoScene.addJointLocator(fbxChild.GetName())
+                    self.CreateHierarchyChild(modoHier, fbxChild, modoNode, "Group")
             # group type.
             else:
-                thisHier = ModoHierarchy()
-                thisHier.name_ = fbxChild.GetName()
-                thisHier.fbxNode_ = fbxChild
-                thisHier.nodeType_ = "Group"
-                thisHier.modoNode_ = modoScene.addJointLocator(thisHier.name_)
-                thisHier.ScaleLocatorRadius(0.1)
-                self.ReadTransform(thisHier.modoNode_, fbxChild)
-                modoHier.AppendChild(thisHier)
-                self.CreateHierarchyRecursive(thisHier)
+                modoNode = modoScene.addJointLocator(fbxChild.GetName())
+                self.CreateHierarchyChild(modoHier, fbxChild, modoNode, "Group")
 
     def CreateHierarchy(self):
         if self.fbxScene_ is None:
@@ -243,7 +238,6 @@ class ModoFbxImporter:
         count = fbxMesh.GetPolygonCount()
         vertices = fbxMesh.GetControlPoints() 
 
-        vertexId = 0
         for polyNo in range(count):
             polySize = fbxMesh.GetPolygonSize(polyNo)
             poly = []
@@ -253,6 +247,41 @@ class ModoFbxImporter:
                 poly.append(controlPointIdx)
             modoPolygon = mesh.geometry.polygons.new(poly)
 
+    def ReadUV(self, mesh, fbxMesh):
+        count = fbxMesh.GetElementUVCount()
+        for uvMapIdx in range(count):
+            # Get fbx uv map and Create modo uv map.
+            fbxMap = fbxMesh.GetElementUV(uvMapIdx)
+            modoMap = mesh.geometry.vmaps.addUVMap(fbxMap.GetName())
+
+            # Get fbx uv.
+            mapMode = fbxMap.GetMappingMode()
+            refMode = fbxMap.GetReferenceMode()
+            if mapMode == FbxLayerElement.eByControlPoint:
+                if refMode == FbxLayerElement.eDirect:
+                    # Vertex direct mode.
+                    darr = fbxMap.GetDirectArray()
+                    vcount = darr.GetCount()
+                    for vIdx in range(vcount):
+                        uv = darr.GetAt(vIdx)
+                        modoMap[vIdx] = (uv[0], uv[1])
+                elif refMode == FbxLayerElement.eIndexToDirect:
+                    # Vertex index mode.
+                    iarr = fbxMap.GetIndexArray()
+                    darr = fbxMap.GetDirectArray()
+                    vcount = iarr.GetCount()
+                    for vIdx in range(vcount):
+                        uv = darr.GetAt(iarr.GetAt(vIdx))
+                        modoMap[vIdx] = (uv[0], uv[1])
+            elif mapMode == FbxLayerElement.eByPolygonVertex:
+                # Polygon mode.
+                darr = fbxMap.GetDirectArray()
+                for (pIdx, poly) in enumerate(mesh.geometry.polygons):
+                    for vIdx in xrange(poly.numVertices):
+                        idx = fbxMesh.GetTextureUVIndex(pIdx, vIdx)
+                        uv = darr.GetAt(idx)
+                        poly.setUV((uv[0], uv[1]), vIdx, modoMap)
+
     def CreateModoMesh(self, modoHier):
         mesh = modoHier.modoNode_
         fbxMesh = modoHier.fbxNode_.GetNodeAttribute()
@@ -260,6 +289,8 @@ class ModoFbxImporter:
         self.ReadVertex(mesh, fbxMesh)
         # read all polygons.
         self.ReadPolygon(mesh, fbxMesh)
+        # read all UVs.
+        self.ReadUV(mesh, fbxMesh)
         # read deformer.
         self.ReadDeformer(mesh, fbxMesh)
 
