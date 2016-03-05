@@ -282,6 +282,43 @@ class ModoFbxImporter:
                         uv = darr.GetAt(idx)
                         poly.setUV((uv[0], uv[1]), vIdx, modoMap)
 
+    def ReadMaterial(self, mesh, fbxMesh):
+        scene = modo.scene.current()
+        # Add material.
+        fbxNode = fbxMesh.GetNode()
+        count = fbxNode.GetMaterialCount()
+        modoMats = []
+        for i in xrange(count):
+            fbxMat = fbxNode.GetMaterial(i)
+            diff = fbxMat.Diffuse.Get()
+            modoMat = scene.addMaterial(name=fbxMat.GetName())
+            modoMat.channel('diffCol').set((diff[0], diff[1], diff[2]))
+            modoMats.append(modoMat)
+
+        # Check material all same.
+        count = fbxMesh.GetElementMaterialCount()
+        allSameMatId = -1
+        for i in xrange(count):
+            matElem = fbxMesh.GetElementMaterial(i)
+            if matElem.GetMappingMode() == FbxLayerElement.eAllSame:
+                allSameMatId = matElem.GetIndexArray().GetAt(0)
+                break
+
+        if allSameMatId >= 0:
+            # Assign material all same.
+            matName = modoMats[allSameMatId].name
+            for poly in mesh.geometry.polygons:
+                poly.materialTag = matName
+        else:
+            # Assign material by polygon.
+            for i in xrange(count):
+                matElem = fbxMesh.GetElementMaterial(i)
+                if matElem.GetMappingMode() == FbxLayerElement.eByPolygon:
+                    indexArray = matElem.GetIndexArray()
+                    for (j, poly) in enumerate(mesh.geometry.polygons):
+                        poly.materialTag = modoMats[indexArray.GetAt(j)].name
+                    break;
+
     def CreateModoMesh(self, modoHier):
         mesh = modoHier.modoNode_
         fbxMesh = modoHier.fbxNode_.GetNodeAttribute()
@@ -293,6 +330,8 @@ class ModoFbxImporter:
         self.ReadUV(mesh, fbxMesh)
         # read deformer.
         self.ReadDeformer(mesh, fbxMesh)
+        # read materials.
+        self.ReadMaterial(mesh, fbxMesh)
 
 if __name__ == '__main__':
     # ファイルオープンダイアログを表示する
