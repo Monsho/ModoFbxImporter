@@ -236,14 +236,14 @@ class ModoFbxImporter:
         # 頂点情報を読み込む
         count = fbxMesh.GetControlPointsCount()
         vertices = fbxMesh.GetControlPoints()
+        modoVertices = mesh.geometry.vertices
         globalScale = self.globalScale_
         mon = self.GetProgressBar(count)
         for (i, vertex) in enumerate(vertices):
             if mon.step(1): sys.exit("LXe_ABORT")
-            modoVtx = mesh.geometry.vertices.new((vertex[0] * globalScale, vertex[1] * globalScale, vertex[2] * globalScale))
-
-            # 法線が存在する場合は読み込む
-            if normalMap is not None:
+            modoVertices._accessor.New((vertex[0] * globalScale, vertex[1] * globalScale, vertex[2] * globalScale))
+        if normalMap is not None:
+            for (i, modoVtx) in enumerate(modoVertices):
                 normal = fbxNormal.GetDirectArray().GetAt(i)
                 normalMap.setNormal((normal[0], normal[1], normal[2]), modoVtx)
 
