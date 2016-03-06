@@ -1,5 +1,5 @@
 ﻿# python
-import lx, modo, lxu
+import lx, modo, lxu, sys
 from fbx import *
 
 class ModoHierarchy:
@@ -48,6 +48,12 @@ class ModoFbxImporter:
         self.modoScene_ = None
         self.hierarchy_ = None
         self.globalScale_ = 1.0
+
+        self.monitor_ = lx.Monitor()
+
+    def GetProgressBar(self, count):
+        self.monitor_.init(count)
+        return self.monitor_
 
     def LoadFbxScene(self, path):
         self.path_ = path;
@@ -219,7 +225,9 @@ class ModoFbxImporter:
         vertices = fbxMesh.GetControlPoints()
         normalMap = None
         globalScale = self.globalScale_
+        mon = self.GetProgressBar(count)
         for i in range(count):
+            if mon.step(1): sys.exit("LXe_ABORT")
             vertex = vertices[i]
             modoVtx = mesh.geometry.vertices.new((vertex[0] * globalScale, vertex[1] * globalScale, vertex[2] * globalScale))
 
@@ -238,7 +246,9 @@ class ModoFbxImporter:
         count = fbxMesh.GetPolygonCount()
         vertices = fbxMesh.GetControlPoints() 
 
+        mon = self.GetProgressBar(count)
         for polyNo in range(count):
+            if mon.step(1): sys.exit("LXe_ABORT")
             polySize = fbxMesh.GetPolygonSize(polyNo)
             poly = []
             # Make polygon
@@ -262,7 +272,9 @@ class ModoFbxImporter:
                     # Vertex direct mode.
                     darr = fbxMap.GetDirectArray()
                     vcount = darr.GetCount()
+                    mon = self.GetProgressBar(vcount)
                     for vIdx in range(vcount):
+                        if mon.step(1): sys.exit("LXe_ABORT")
                         uv = darr.GetAt(vIdx)
                         modoMap[vIdx] = (uv[0], uv[1])
                 elif refMode == FbxLayerElement.eIndexToDirect:
@@ -270,13 +282,17 @@ class ModoFbxImporter:
                     iarr = fbxMap.GetIndexArray()
                     darr = fbxMap.GetDirectArray()
                     vcount = iarr.GetCount()
+                    mon = self.GetProgressBar(vcount)
                     for vIdx in range(vcount):
+                        if mon.step(1): sys.exit("LXe_ABORT")
                         uv = darr.GetAt(iarr.GetAt(vIdx))
                         modoMap[vIdx] = (uv[0], uv[1])
             elif mapMode == FbxLayerElement.eByPolygonVertex:
                 # Polygon mode.
                 darr = fbxMap.GetDirectArray()
+                mon = self.GetProgressBar(len(mesh.geometry.polygons))
                 for (pIdx, poly) in enumerate(mesh.geometry.polygons):
+                    if mon.step(1): sys.exit("LXe_ABORT")
                     for vIdx in xrange(poly.numVertices):
                         idx = fbxMesh.GetTextureUVIndex(pIdx, vIdx)
                         uv = darr.GetAt(idx)
@@ -307,7 +323,9 @@ class ModoFbxImporter:
         if allSameMatId >= 0:
             # Assign material all same.
             matName = modoMats[allSameMatId].name
+            mon = self.GetProgressBar(len(mesh.geometry.polygons))
             for poly in mesh.geometry.polygons:
+                if mon.step(1): sys.exit("LXe_ABORT")
                 poly.materialTag = matName
         else:
             # Assign material by polygon.
@@ -315,7 +333,9 @@ class ModoFbxImporter:
                 matElem = fbxMesh.GetElementMaterial(i)
                 if matElem.GetMappingMode() == FbxLayerElement.eByPolygon:
                     indexArray = matElem.GetIndexArray()
+                    mon = self.GetProgressBar(len(mesh.geometry.polygons))
                     for (j, poly) in enumerate(mesh.geometry.polygons):
+                        if mon.step(1): sys.exit("LXe_ABORT")
                         poly.materialTag = modoMats[indexArray.GetAt(j)].name
                     break;
 
