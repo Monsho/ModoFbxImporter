@@ -221,26 +221,31 @@ class ModoFbxImporter:
                     lx.eval("anim.setup off") # セットアップモード終了
 
     def ReadVertex(self, mesh, fbxMesh):
+        # 法線レイヤーが存在するなら事前に取得しておく
+        normalMap = None
+        fbxNormal = None
+        count = fbxMesh.GetLayerCount()
+        for j in range(count):
+            layerNormal = fbxMesh.GetLayer(j).GetNormals()
+            if layerNormal:
+                if layerNormal.GetMappingMode() == FbxLayerElement.eByControlPoint:
+                    if layerNormal.GetReferenceMode() == FbxLayerElement.eDirect:
+                        normalMap = mesh.geometry.vmaps.addVertexNormalMap("FBX Normal")
+                        fbxNormal = layerNormal
+
+        # 頂点情報を読み込む
         count = fbxMesh.GetControlPointsCount()
         vertices = fbxMesh.GetControlPoints()
-        normalMap = None
         globalScale = self.globalScale_
         mon = self.GetProgressBar(count)
-        for i in range(count):
+        for (i, vertex) in enumerate(vertices):
             if mon.step(1): sys.exit("LXe_ABORT")
-            vertex = vertices[i]
             modoVtx = mesh.geometry.vertices.new((vertex[0] * globalScale, vertex[1] * globalScale, vertex[2] * globalScale))
 
             # 法線が存在する場合は読み込む
-            for j in range(fbxMesh.GetLayerCount()):
-                layerNormal = fbxMesh.GetLayer(j).GetNormals()
-                if layerNormal:
-                    if layerNormal.GetMappingMode() == FbxLayerElement.eByControlPoint:
-                        if layerNormal.GetReferenceMode() == FbxLayerElement.eDirect:
-                            if normalMap is None:
-                                normalMap = mesh.geometry.vmaps.addVertexNormalMap("FBX Normal")
-                            normal = layerNormal.GetDirectArray().GetAt(i)
-                            normalMap.setNormal((normal[0], normal[1], normal[2]), modoVtx)
+            if normalMap is not None:
+                normal = fbxNormal.GetDirectArray().GetAt(i)
+                normalMap.setNormal((normal[0], normal[1], normal[2]), modoVtx)
 
     def ReadPolygon(self, mesh, fbxMesh):
         count = fbxMesh.GetPolygonCount()
